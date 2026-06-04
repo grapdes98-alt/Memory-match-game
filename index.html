@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Memory Match</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@700;800&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0d14;
+    --surface: #16161f;
+    --border: rgba(255,255,255,0.08);
+    --accent: #7c6ff7;
+    --accent2: #f76f9a;
+    --text: #f0eeff;
+    --muted: rgba(240,238,255,0.45);
+    --match: #1D9E75;
+  }
+
+  body {
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1rem;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 60% 40% at 20% 20%, rgba(124,111,247,0.12) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 40% at 80% 80%, rgba(247,111,154,0.08) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container { position: relative; z-index: 1; width: 100%; max-width: 480px; }
+
+  header { text-align: center; margin-bottom: 2rem; }
+
+  header h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(2rem, 6vw, 2.8rem);
+    font-weight: 800;
+    letter-spacing: -1px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 0.25rem;
+  }
+
+  header p { font-size: 12px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; }
+
+  .stats {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .stat { text-align: center; }
+  .stat-label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+  .stat-value { font-size: 1.5rem; font-weight: 700; color: var(--text); }
+
+  .board {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+
+  .card {
+    aspect-ratio: 1;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    transition: transform 0.15s, border-color 0.2s, background 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card::before {
+    content: '?';
+    font-family: 'Syne', sans-serif;
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: rgba(255,255,255,0.1);
+    position: absolute;
+  }
+
+  .card.flipped::before, .card.matched::before { display: none; }
+
+  .card:hover:not(.flipped):not(.matched) {
+    transform: scale(1.06);
+    border-color: var(--accent);
+    background: #1e1e2e;
+  }
+
+  .card.flipped {
+    background: #1e1e2e;
+    border-color: rgba(124,111,247,0.5);
+  }
+
+  .card.matched {
+    background: rgba(29,158,117,0.12);
+    border-color: var(--match);
+    cursor: default;
+  }
+
+  .card.shake { animation: shake 0.35s ease; }
+  @keyframes shake {
+    0%,100%{transform:translateX(0)}
+    20%{transform:translateX(-8px)}
+    60%{transform:translateX(8px)}
+  }
+
+  .controls { margin-top: 1.5rem; text-align: center; }
+
+  .btn {
+    padding: 10px 28px;
+    border-radius: 8px;
+    border: 1px solid rgba(124,111,247,0.4);
+    background: transparent;
+    color: var(--accent);
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: background 0.2s, border-color 0.2s;
+  }
+
+  .btn:hover { background: rgba(124,111,247,0.12); border-color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Memory Match</h1>
+    <p>Flip &amp; find all pairs</p>
+  </header>
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-label">Moves</div>
+      <div class="stat-value" id="moves">0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Pairs</div>
+      <div class="stat-value" id="pairs">0 / 8</div>
+    </div>
+  </div>
+  <div class="board" id="board"></div>
+  <div class="controls">
+    <button class="btn" onclick="initGame()">Restart</button>
+  </div>
+</div>
+
+<script>
+const EMOJIS = ['🐶','🐱','🦊','🐻','🐼','🐨','🐯','🦁'];
+let cards = [], flipped = [], matchedCount = 0, moves = 0, lock = false;
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function initGame() {
+  cards = shuffle([...EMOJIS, ...EMOJIS].map((e, i) => ({ id: i, emoji: e, flipped: false, matched: false })));
+  flipped = []; matchedCount = 0; moves = 0; lock = false;
+  document.getElementById('moves').textContent = 0;
+  document.getElementById('pairs').textContent = '0 / 8';
+  renderBoard();
+}
+
+function renderBoard() {
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  cards.forEach((card, idx) => {
+    const el = document.createElement('div');
+    el.className = 'card' + (card.flipped || card.matched ? ' flipped' : '') + (card.matched ? ' matched' : '');
+    el.textContent = (card.flipped || card.matched) ? card.emoji : '';
+    el.dataset.index = idx;
+    el.addEventListener('click', () => handleClick(idx));
+    board.appendChild(el);
+  });
+}
+
+function handleClick(idx) {
+  if (lock || cards[idx].matched || cards[idx].flipped) return;
+  cards[idx].flipped = true;
+  flipped.push(idx);
+  updateCard(idx);
+
+  if (flipped.length === 2) {
+    lock = true;
+    moves++;
+    document.getElementById('moves').textContent = moves;
+    const [a, b] = flipped;
+    if (cards[a].emoji === cards[b].emoji) {
+      cards[a].matched = cards[b].matched = true;
+      matchedCount++;
+      document.getElementById('pairs').textContent = matchedCount + ' / 8';
+      flipped = []; lock = false;
+      updateCard(a); updateCard(b);
+      if (matchedCount === 8) setTimeout(showWin, 500);
+    } else {
+      setTimeout(() => {
+        cards[a].flipped = cards[b].flipped = false;
+        const elA = document.querySelector(`[data-index='${a}']`);
+        const elB = document.querySelector(`[data-index='${b}']`);
+        if (elA) elA.classList.add('shake');
+        if (elB) elB.classList.add('shake');
+        setTimeout(() => { flipped = []; lock = false; updateCard(a); updateCard(b); }, 350);
+      }, 800);
+    }
+  }
+}
+
+function updateCard(idx) {
+  const el = document.querySelector(`[data-index='${idx}']`);
+  if (!el) return;
+  const c = cards[idx];
+  el.className = 'card' + (c.flipped || c.matched ? ' flipped' : '') + (c.matched ? ' matched' : '');
+  el.textContent = (c.flipped || c.matched) ? c.emoji : '';
+}
+
+function showWin() {
+  // =====================================================
+  // 👇 REPLACE THIS with your own image URL or base64
+  // =====================================================
+  const WIN_IMAGE_SRC = "https://c.tenor.com/0rKL5dtMPkgAAAAC/tenor.gif";
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>You Won!</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  body {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: #000;
+    cursor: pointer;
+  }
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    animation: fadeIn 0.6s ease forwards;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+<img src="${WIN_IMAGE_SRC}" alt="winner" onclick="window.close()" />
+</body>
+</html>`;
+
+  const blob = new Blob([html], { type: 'text/html' });
+  window.open(URL.createObjectURL(blob), '_blank');
+}
+
+initGame();
+</script>
+</body>
+</html>
