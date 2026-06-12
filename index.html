@@ -725,9 +725,13 @@ function showSummary(){
   document.getElementById('sum-sub').textContent=sub;
 
   // Win GIFs — replace these URLs with your own
-  const WIN_GIFS=[
+    const WIN_GIFS=[
   'https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExMXA2a3R6d3J5dnRubDgwd3ozNnE4Nno2MnhodXhmbWNlajBlcmZnNyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/QAbMStmGzAdk0YxCYU/giphy.gif',
 ];
+  const gifEl=document.getElementById('sum-gif');
+  gifEl.src=WIN_GIFS[Math.floor(Math.random()*WIN_GIFS.length)];
+  gifEl.style.display='block';
+}
 
 document.getElementById('play-again-btn').addEventListener('click',()=>{
   document.getElementById('summary-card').classList.remove('show');
